@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Star, Plus, Trash2, Upload, ArrowRight, ArrowLeft, Download, Sparkles, Trophy, TrendingUp, TrendingDown, Edit3, RotateCcw, Award, Move, X, Check } from 'lucide-react';
+import { Star, Plus, Trash2, Upload, ArrowRight, ArrowLeft, Download, Sparkles, Trophy, TrendingUp, TrendingDown, Edit3, RotateCcw, Award, Move, X, Check, Image as ImageIcon, FileJson, FileText } from 'lucide-react';
+import html2canvas from 'html2canvas';
 
 const COLORS = {
   bg: '#FFF8E7',
@@ -140,6 +141,273 @@ function FilterButton({ active, onClick, color, icon, label, textColor }) {
   );
 }
 
+// ---------- Off-screen export templates ----------
+// These render the results in a fixed layout that gets captured to PNG by html2canvas.
+// They're never visible to the user — they only mount when the export modal is open.
+
+const EXPORT_WATERMARK = `Made with Score-O-Matic · musu124.github.io/Rating-website`;
+
+const LeaderboardExport = React.forwardRef(({ sortedResults, resultFilter, resultOrder }, ref) => {
+  // Title reflects the current filter context
+  const titleText =
+    resultFilter === 'best3' ? 'Top 3' :
+    resultFilter === 'worst3' ? 'Bottom 3' :
+    resultOrder === 'desc' ? 'The Rankings' : 'The Rankings (Low → High)';
+
+  const medals = ['🥇', '🥈', '🥉'];
+  // Podium = top 3 only when sorting high→low or filtering best3
+  const showPodium = resultFilter === 'best3' || (resultFilter === 'all' && resultOrder === 'desc');
+  const podium = showPodium ? sortedResults.slice(0, 3) : [];
+  const rest = showPodium ? sortedResults.slice(3) : sortedResults;
+
+  return (
+    <div
+      ref={ref}
+      style={{
+        width: 720,
+        padding: '48px 40px',
+        background: COLORS.bg,
+        backgroundImage: `radial-gradient(${COLORS.ink}10 1px, transparent 1px)`,
+        backgroundSize: '20px 20px',
+        fontFamily: 'Georgia, serif',
+        color: COLORS.ink,
+      }}
+    >
+      {/* Header */}
+      <div style={{ textAlign: 'center', marginBottom: 32 }}>
+        <div style={{
+          display: 'inline-block', padding: '8px 16px', borderRadius: 999,
+          background: COLORS.ink, color: COLORS.yellow, marginBottom: 12,
+          fontSize: 12, fontWeight: 900, letterSpacing: '0.2em', textTransform: 'uppercase',
+          fontFamily: 'system-ui, sans-serif',
+        }}>
+          ★ The Results Are In ★
+        </div>
+        <h1 style={{
+          fontSize: 56, fontWeight: 900, fontStyle: 'italic', margin: 0,
+          color: COLORS.pink, textShadow: `3px 3px 0 ${COLORS.ink}`, lineHeight: 1,
+        }}>
+          {titleText}
+        </h1>
+      </div>
+
+      {/* Podium */}
+      {podium.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24 }}>
+          {podium.map((item, idx) => {
+            const bgs = [COLORS.yellow, COLORS.mint, COLORS.pink];
+            return (
+              <div
+                key={item.id}
+                style={{
+                  background: bgs[idx], border: `4px solid ${COLORS.ink}`, borderRadius: 24,
+                  padding: '20px 24px', boxShadow: `6px 6px 0 ${COLORS.ink}`,
+                  display: 'flex', alignItems: 'center', gap: 20,
+                }}
+              >
+                <div style={{ fontSize: 56, lineHeight: 1, width: 72, textAlign: 'center' }}>{medals[idx]}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 28, fontWeight: 900, lineHeight: 1.1, wordBreak: 'break-word' }}>{item.name}</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 44, fontWeight: 900, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                    {item.score.toFixed(1)}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Rest of the ranking (compact list) */}
+      {rest.length > 0 && (
+        <div style={{
+          background: 'rgba(255,255,255,0.5)', border: `3px solid ${COLORS.ink}`, borderRadius: 20,
+          padding: '16px 20px', boxShadow: `4px 4px 0 ${COLORS.ink}`,
+        }}>
+          {rest.map((item, idx) => {
+            const rank = (podium.length > 0 ? 3 : 0) + idx + 1;
+            return (
+              <div
+                key={item.id}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 16, padding: '10px 4px',
+                  borderBottom: idx < rest.length - 1 ? `2px dashed ${COLORS.ink}33` : 'none',
+                }}
+              >
+                <div style={{ width: 48, fontSize: 24, fontWeight: 900 }}>#{rank}</div>
+                <div style={{ flex: 1, fontSize: 18, fontWeight: 700, wordBreak: 'break-word', fontFamily: 'system-ui, sans-serif' }}>{item.name}</div>
+                <div style={{ fontSize: 22, fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}>{item.score.toFixed(1)}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Watermark */}
+      <div style={{
+        marginTop: 32, textAlign: 'center', fontSize: 11, fontWeight: 700,
+        opacity: 0.5, letterSpacing: '0.05em', fontFamily: 'system-ui, sans-serif',
+      }}>
+        {EXPORT_WATERMARK}
+      </div>
+    </div>
+  );
+});
+
+const FullReportExport = React.forwardRef(({ sortedResults, criteria, ratings, resultFilter, resultOrder }, ref) => {
+  const titleText =
+    resultFilter === 'best3' ? 'Top 3 — Full Report' :
+    resultFilter === 'worst3' ? 'Bottom 3 — Full Report' :
+    'Full Report';
+
+  const medals = ['🥇', '🥈', '🥉'];
+  const showPodiumMedals = resultFilter === 'best3' || (resultFilter === 'all' && resultOrder === 'desc');
+
+  return (
+    <div
+      ref={ref}
+      style={{
+        width: 900,
+        padding: '48px 40px',
+        background: COLORS.bg,
+        backgroundImage: `radial-gradient(${COLORS.ink}10 1px, transparent 1px)`,
+        backgroundSize: '20px 20px',
+        fontFamily: 'Georgia, serif',
+        color: COLORS.ink,
+      }}
+    >
+      {/* Header */}
+      <div style={{ textAlign: 'center', marginBottom: 32 }}>
+        <div style={{
+          display: 'inline-block', padding: '8px 16px', borderRadius: 999,
+          background: COLORS.ink, color: COLORS.yellow, marginBottom: 12,
+          fontSize: 12, fontWeight: 900, letterSpacing: '0.2em', textTransform: 'uppercase',
+          fontFamily: 'system-ui, sans-serif',
+        }}>
+          ★ Score-O-Matic ★
+        </div>
+        <h1 style={{
+          fontSize: 56, fontWeight: 900, fontStyle: 'italic', margin: 0,
+          color: COLORS.pink, textShadow: `3px 3px 0 ${COLORS.ink}`, lineHeight: 1,
+        }}>
+          {titleText}
+        </h1>
+      </div>
+
+      {/* Criteria table */}
+      <div style={{
+        background: 'rgba(255,255,255,0.6)', border: `3px solid ${COLORS.ink}`, borderRadius: 20,
+        padding: '16px 20px', marginBottom: 24, boxShadow: `4px 4px 0 ${COLORS.ink}`,
+      }}>
+        <div style={{
+          fontSize: 12, fontWeight: 900, letterSpacing: '0.15em', textTransform: 'uppercase',
+          marginBottom: 12, opacity: 0.7, fontFamily: 'system-ui, sans-serif',
+        }}>
+          Criteria
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+          {criteria.map(c => (
+            <div
+              key={c.id}
+              style={{
+                padding: '6px 14px', borderRadius: 999, border: `2px solid ${COLORS.ink}`,
+                background: c.weight < 0 ? COLORS.coral : COLORS.yellow,
+                fontSize: 14, fontWeight: 900, fontFamily: 'system-ui, sans-serif',
+              }}
+            >
+              {c.name} <span style={{ opacity: 0.7 }}>(×{c.weight})</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Items */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {sortedResults.map((item, idx) => {
+          const palette = [COLORS.yellow, COLORS.mint, COLORS.pink, COLORS.lavender, COLORS.coral, COLORS.blue];
+          const bg = palette[idx % palette.length];
+          const isPodium = showPodiumMedals && idx < 3;
+          const itemRatings = ratings[item.id] || {};
+          return (
+            <div
+              key={item.id}
+              style={{
+                background: bg, border: `4px solid ${COLORS.ink}`, borderRadius: 24,
+                padding: 20, boxShadow: `6px 6px 0 ${COLORS.ink}`,
+                display: 'flex', alignItems: 'center', gap: 20,
+              }}
+            >
+              {/* Rank */}
+              <div style={{ width: 64, textAlign: 'center', flexShrink: 0 }}>
+                {isPodium
+                  ? <div style={{ fontSize: 48, lineHeight: 1 }}>{medals[idx]}</div>
+                  : <div style={{ fontSize: 32, fontWeight: 900 }}>#{idx + 1}</div>}
+              </div>
+
+              {/* Image */}
+              {item.image ? (
+                <img
+                  src={item.image}
+                  alt=""
+                  crossOrigin="anonymous"
+                  style={{
+                    width: 96, height: 96, borderRadius: 16, objectFit: 'cover',
+                    border: `4px solid ${COLORS.ink}`, flexShrink: 0,
+                  }}
+                />
+              ) : (
+                <div style={{
+                  width: 96, height: 96, borderRadius: 16, border: `4px dashed ${COLORS.ink}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  opacity: 0.4, flexShrink: 0, fontSize: 11, fontWeight: 900,
+                  fontFamily: 'system-ui, sans-serif',
+                }}>
+                  no img
+                </div>
+              )}
+
+              {/* Name + per-criterion stars */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 22, fontWeight: 900, lineHeight: 1.1, marginBottom: 8, wordBreak: 'break-word' }}>
+                  {item.name}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', fontFamily: 'system-ui, sans-serif' }}>
+                  {criteria.map(c => {
+                    const stars = itemRatings[c.id];
+                    return (
+                      <div key={c.id} style={{ fontSize: 12, fontWeight: 700 }}>
+                        <span style={{ opacity: 0.7 }}>{c.name}:</span>{' '}
+                        <span>{stars !== undefined ? `${'★'.repeat(stars)}${'☆'.repeat(Math.max(0, 5 - stars))}` : '—'}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Score */}
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ fontSize: 42, fontWeight: 900, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                  {item.score.toFixed(1)}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Watermark */}
+      <div style={{
+        marginTop: 32, textAlign: 'center', fontSize: 11, fontWeight: 700,
+        opacity: 0.5, letterSpacing: '0.05em', fontFamily: 'system-ui, sans-serif',
+      }}>
+        {EXPORT_WATERMARK}
+      </div>
+    </div>
+  );
+});
+
 // ---------- Main app ----------
 export default function RatingApp() {
   const [page, setPage] = useState(1);
@@ -150,6 +418,10 @@ export default function RatingApp() {
   const [resultOrder, setResultOrder] = useState('desc');
   const [resultFilter, setResultFilter] = useState('all');
   const [cameFromResults, setCameFromResults] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const leaderboardExportRef = useRef(null);
+  const fullReportExportRef = useRef(null);
   const fileInputRef = useRef(null);
   const importInputRef = useRef(null);
 
@@ -362,7 +634,7 @@ export default function RatingApp() {
 
   const allItemsRated = items.length > 0 && items.every(i => isItemFullyRated(i.id));
 
-  const handleExport = () => {
+  const handleExportJSON = () => {
     const data = { criteria, items, ratings, exportedAt: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -371,6 +643,33 @@ export default function RatingApp() {
     a.download = `score-o-matic-${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleExportPNG = async (mode) => {
+    setExporting(true);
+    // Give React a tick to mount the off-screen export component
+    await new Promise(r => setTimeout(r, 50));
+    const node = mode === 'leaderboard' ? leaderboardExportRef.current : fullReportExportRef.current;
+    if (!node) { setExporting(false); return; }
+    try {
+      const canvas = await html2canvas(node, {
+        backgroundColor: COLORS.bg,
+        scale: 2, // retina-sharp output
+        useCORS: true,
+        logging: false,
+      });
+      const dataUrl = canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `score-o-matic-${mode}-${Date.now()}.png`;
+      a.click();
+    } catch (err) {
+      alert('Could not export image. Try again?');
+      console.error(err);
+    } finally {
+      setExporting(false);
+      setExportModalOpen(false);
+    }
   };
 
   const handleImport = (e) => {
@@ -466,10 +765,22 @@ export default function RatingApp() {
               <ArrowRight className="group-hover:translate-x-1 transition-transform" size={24} />
             </button>
 
-            <div className="mt-8 flex justify-center gap-4">
-              <button onClick={() => importInputRef.current?.click()} className="text-sm underline opacity-60 hover:opacity-100" style={{ color: COLORS.ink }}>
-                Import saved session
+            <div className="mt-10 flex flex-col items-center gap-2">
+              <div className="flex items-center gap-3 w-full max-w-xs">
+                <div className="flex-1 h-px" style={{ background: COLORS.ink, opacity: 0.2 }} />
+                <span className="text-xs font-black uppercase tracking-widest" style={{ color: COLORS.ink, opacity: 0.5 }}>or</span>
+                <div className="flex-1 h-px" style={{ background: COLORS.ink, opacity: 0.2 }} />
+              </div>
+              <button
+                onClick={() => importInputRef.current?.click()}
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl border-4 font-black uppercase tracking-wide text-sm hover:scale-105 transition-transform"
+                style={{ background: 'white', color: COLORS.ink, borderColor: COLORS.ink, boxShadow: `4px 4px 0 ${COLORS.ink}` }}
+              >
+                <Upload size={16} /> Import saved session
               </button>
+              <p className="text-xs italic max-w-xs text-center mt-1" style={{ color: COLORS.ink, opacity: 0.65 }}>
+                Pick up where you left off. Choose the <span className="font-bold not-italic">.json</span> file you saved before with <span className="font-bold not-italic">"Save session"</span>.
+              </p>
               <input ref={importInputRef} type="file" accept=".json" onChange={handleImport} className="hidden" />
             </div>
           </div>
@@ -931,11 +1242,19 @@ export default function RatingApp() {
               <Edit3 size={18} /> Edit ratings
             </button>
             <button
-              onClick={handleExport}
+              onClick={() => setExportModalOpen(true)}
               className="px-6 py-3 rounded-2xl border-4 font-black uppercase tracking-wide flex items-center gap-2 hover:scale-105 transition-transform"
-              style={{ background: COLORS.blue, color: 'white', borderColor: COLORS.ink, boxShadow: `4px 4px 0 ${COLORS.ink}` }}
+              style={{ background: COLORS.pink, color: 'white', borderColor: COLORS.ink, boxShadow: `4px 4px 0 ${COLORS.ink}` }}
             >
-              <Download size={18} /> Export session
+              <ImageIcon size={18} /> Export as image
+            </button>
+            <button
+              onClick={handleExportJSON}
+              className="px-5 py-3 rounded-2xl border-4 font-black uppercase tracking-wide text-sm flex items-center gap-2 hover:scale-105 transition-transform"
+              style={{ background: 'white', color: COLORS.ink, borderColor: COLORS.ink, boxShadow: `4px 4px 0 ${COLORS.ink}` }}
+              title="Save your session as JSON so you can re-import and keep editing later"
+            >
+              <FileJson size={16} /> Save session
             </button>
             <button
               onClick={() => {
@@ -954,6 +1273,78 @@ export default function RatingApp() {
 
       {/* ============ FOOTER ============ */}
       <Footer />
+
+      {/* ============ EXPORT MODAL ============ */}
+      {exportModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(26, 26, 46, 0.85)' }}
+          onClick={() => !exporting && setExportModalOpen(false)}
+        >
+          <div
+            className="rounded-3xl border-4 p-6 max-w-lg w-full"
+            style={{ background: COLORS.bg, borderColor: COLORS.ink, boxShadow: `8px 8px 0 ${COLORS.pink}` }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <div className="text-xs font-black uppercase tracking-widest mb-1" style={{ color: COLORS.ink, opacity: 0.6 }}>Choose your style</div>
+                <h2 className="text-2xl font-black italic" style={{ color: COLORS.ink, fontFamily: 'Georgia, serif' }}>Export as image</h2>
+              </div>
+              <button
+                onClick={() => !exporting && setExportModalOpen(false)}
+                disabled={exporting}
+                className="p-2 rounded-xl border-2 hover:bg-black hover:bg-opacity-10 disabled:opacity-40"
+                style={{ borderColor: COLORS.ink, color: COLORS.ink }}
+                title="Close"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {exporting ? (
+              <div className="py-10 text-center">
+                <div className="inline-block w-12 h-12 rounded-full border-4 border-t-transparent animate-spin mb-3" style={{ borderColor: COLORS.ink, borderTopColor: 'transparent' }} />
+                <p className="font-black uppercase tracking-widest text-sm" style={{ color: COLORS.ink }}>Rendering your image…</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button
+                  onClick={() => handleExportPNG('leaderboard')}
+                  className="rounded-2xl border-4 p-5 text-left hover:scale-[1.02] transition-transform"
+                  style={{ background: COLORS.yellow, borderColor: COLORS.ink, boxShadow: `4px 4px 0 ${COLORS.ink}` }}
+                >
+                  <Trophy size={32} className="mb-2" style={{ color: COLORS.ink }} />
+                  <div className="font-black text-lg mb-1" style={{ color: COLORS.ink }}>Leaderboard</div>
+                  <div className="text-xs font-medium" style={{ color: COLORS.ink, opacity: 0.7 }}>
+                    Compact podium + ranked list. Great for sharing in chats or on social media.
+                  </div>
+                </button>
+                <button
+                  onClick={() => handleExportPNG('fullReport')}
+                  className="rounded-2xl border-4 p-5 text-left hover:scale-[1.02] transition-transform"
+                  style={{ background: COLORS.mint, borderColor: COLORS.ink, boxShadow: `4px 4px 0 ${COLORS.ink}` }}
+                >
+                  <FileText size={32} className="mb-2" style={{ color: COLORS.ink }} />
+                  <div className="font-black text-lg mb-1" style={{ color: COLORS.ink }}>Full report</div>
+                  <div className="text-xs font-medium" style={{ color: COLORS.ink, opacity: 0.7 }}>
+                    Includes criteria, item photos, and per-criterion scores. Best for the full picture.
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ============ OFF-SCREEN EXPORT TEMPLATES ============ */}
+      {/* These render off-screen only when the export modal is open, then html2canvas captures them. */}
+      {exportModalOpen && (
+        <div style={{ position: 'fixed', left: '-99999px', top: 0, pointerEvents: 'none' }} aria-hidden="true">
+          <LeaderboardExport ref={leaderboardExportRef} sortedResults={sortedResults} resultFilter={resultFilter} resultOrder={resultOrder} />
+          <FullReportExport ref={fullReportExportRef} sortedResults={sortedResults} criteria={criteria} ratings={ratings} resultFilter={resultFilter} resultOrder={resultOrder} />
+        </div>
+      )}
 
       {/* ============ CROPPER MODAL ============ */}
       {cropperSrc && cropperImg && (() => {
