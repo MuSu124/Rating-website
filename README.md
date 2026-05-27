@@ -1,3 +1,14 @@
+# Rated everything
+A local rating tool website built with the help of Claude Opus 4.7
+Created by Musu124
+
+# build and run instructions
+After any changes made in src/app.jsx,
+'npm run deploy' would push these changes to github page
+
+git add, commit, push correctly synchronize between remote repo and local repo main branch
+
+
 # React + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
